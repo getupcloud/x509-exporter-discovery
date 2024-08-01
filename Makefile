@@ -8,7 +8,7 @@ build:
 
 tag:
 	git tag v$(IMAGE_TAG)
-	docker tag $(IMAGE_LATEST) $(IMAGE_NAME)
+	docker tag $(IMAGE_NAME) $(IMAGE_LATEST)
 
 push:
 	docker push $(IMAGE_NAME)
