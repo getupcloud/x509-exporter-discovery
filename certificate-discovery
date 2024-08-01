@@ -96,6 +96,9 @@ for spec in ${CERT_DIRS[*]}; do
   fi
 
   for file in ${found[*]}; do
+    if [ -s /excludes ] && grep -q -f /excludes <<<${file}; then
+      continue
+    fi
     hash=$(chroot $ROOT md5sum "${file}" | cut -f 1 -d ' ')
     CERTIFICATES["$hash"]="${file}" # avoid dup files
   done
@@ -114,6 +117,9 @@ for spec in ${KUBECONFIG_DIRS[*]}; do
   fi
 
   for file in ${found[*]}; do
+    if [ -s /excludes ] && grep -q -f /excludes <<<${file}; then
+      continue
+    fi
     hash=$(chroot ${ROOT} md5sum "${file}" | cut -f 1 -d ' ')
     KUBECONFIGS["$hash"]="$file" # avoid dup files
   done

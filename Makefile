@@ -1,4 +1,4 @@
-IMAGE_TAG    := 0.1.9
+IMAGE_TAG    := 0.1.10
 IMAGE_REPO   := ghcr.io/getupcloud/x509-exporter-discovery
 IMAGE_NAME   := $(IMAGE_REPO):$(IMAGE_TAG)
 IMAGE_LATEST := $(IMAGE_REPO):latest
