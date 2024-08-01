@@ -1,0 +1,49 @@
+#!/bin/bash
+
+LOG_LEVEL=${LOG_LEVEL:-0}
+[ $LOG_LEVEL -ge 2 ] && set -x
+
+# randomize in order to avoid too many concurrent connection to kubeapi
+sleep $((RANDOM % 15))
+
+version=$(curl -sk https://kubernetes.default.svc.cluster.local/version | jq '"\(.major).\(.minor)"' -r | grep -o '[0-9\.]\+')
+
+if [ -x /usr/local/bin/kubectl-v${version} ]; then
+  ln -fs /usr/local/bin/kubectl-v${version} /usr/local/bin/kubectl
+fi
+
+NODE_NAME=$(kubectl get pod -n $NAMESPACE $POD_NAME -o json | jq -r .spec.nodeName)
+NODE=$(kubectl get node $NODE_NAME -o json)
+IS_CP=$(echo "$NODE" | jq '.metadata.labels | (has("node-role.kubernetes.io/control-plane") == true or has("node-role.kubernetes.io/master") == true)')
+
+file=${VALUES_FILE:-/data/values.yaml}
+dir=${file%/*}
+mkdir -p $dir
+
+# Discovery for each kind of node
+if $IS_CP ;then
+  /certificate-discovery controlplane $ROOT
+  CONFIGMAP_NAME=${CONFIGMAP_NAME:-host-paths-exporter-controlplane-values}
+else
+  /certificate-discovery node $ROOT
+  CONFIGMAP_NAME=${CONFIGMAP_NAME:-host-paths-exporter-node-values}
+fi >$file
+
+if [ $LOG_LEVEL -ge 1 ]; then
+  echo Created $file
+  echo ---
+  cat $file
+  echo ---
+fi
+
+# Create the configmaps to be used by helm to install x509-certificates-exporter
+# they are going to be overwriten for each node where this code runs, but thats not a problem because the results should be the same.
+kubectl create configmap -n ${CONFIGMAP_NAMESPACE:-$NAMESPACE} $CONFIGMAP_NAME --from-file=${file} --dry-run -o yaml | kubectl apply -f -
+
+# Restart after some time because some OKD controlplane pods may have being updates, incrementing its revision number.
+FREQUENCY_HOURS=${FREQUENCY_HOURS:-24}
+echo
+echo Will run again $(date --utc --date="now + $FREQUENCY_HOURS hours")
+
+sleep ${FREQUENCY_HOURS}h
+exec "$0" "$@"

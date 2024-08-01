@@ -1,0 +1,131 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <ROLE=controlplane|node> [ROOTDIR=/]" >&2
+  exit 1
+fi
+
+declare -A CERTIFICATES=()
+declare -A KUBECONFIGS=()
+
+# Role will define the daemonSet name for x509-certificate-exporter config
+ROLE="$1"
+ROOT="${2:-/}"
+IS_OKD=false
+OKD_ROOT_DIR=/etc/kubernetes/static-pod-resources
+LOG_LEVEL=${LOG_LEVEL:-0}
+
+[ $LOG_LEVEL -ge 2 ] && set -x
+
+set -eu
+
+# First we look for diretories where to search for files
+
+if [ $ROLE == controlplane ]; then
+  # Directories where to find certificates.
+  # maxdepth=N defines how much deep into this directory to look for files (optional, default is 1).
+  CERT_DIRS=(
+    maxdepth=1:/etc/kubernetes
+    maxdepth=1:/etc/kubernetes/pki
+    maxdepth=1:/etc/kubernetes/ssl
+  )
+
+  if [ -d ${ROOT}${OKD_ROOT_DIR} ]; then
+    IS_OKD=true
+
+    # OKD keep all controlplane certificates inside pod-specific host directories
+    CERT_DIRS+=(
+      maxdepth=5:$OKD_ROOT_DIR/configmaps
+      maxdepth=5:$OKD_ROOT_DIR/etcd-certs
+      maxdepth=5:$OKD_ROOT_DIR/kube-apiserver-certs
+      maxdepth=5:$OKD_ROOT_DIR/kube-controller-manager-certs
+      maxdepth=5:$OKD_ROOT_DIR/kube-scheduler-certs
+    )
+
+    # find latest pod revision for each controlplane pod
+    # each CP pod has it's own set of certificates
+    for name in etcd kube-apiserver kube-controller-manager kube-scheduler; do
+      revision=$(chroot $ROOT printf "%s\n" $OKD_ROOT_DIR/${name}-pod-*/ | awk -F- '{print $NF}' | sort -n | tail -n 1)
+      pod_dir="$OKD_ROOT_DIR/${name}-pod-$revision"
+
+      if [ -d "$pod_dir" ]; then
+        CERT_DIRS+=( "maxdepth=5:$pod_dir" )
+      fi
+    done
+  fi
+else
+  CERT_DIRS=(
+    maxdepth=1:/etc/kubernetes
+    maxdepth=1:/var/lib/kubelet/pki/kubelet-client-current.pem
+    maxdepth=1:/var/lib/kubelet/pki/kubelet-server-current.pem
+  )
+fi
+
+# Directories where to find kubeconfig files.
+# maxdepth=N defines how much deep into this directory to look for files (optional, default is 1).
+KUBECONFIG_DIRS=(
+  maxdepth=1:/etc/kubernetes
+  maxdepth=1:/var/lib/kubelet
+)
+
+if [ $LOG_LEVEL -ge 1 ]; then
+  echo CERT_DIRS: >&2
+  printf "  %s\n" ${CERT_DIRS[*]} >&2
+
+  echo KUBECONFIG_DIRS: >&2
+  printf "  %s\n" ${KUBECONFIG_DIRS[*]} >&2
+fi
+
+# Now we look inside the directories for files
+
+## Certificates
+
+for spec in ${CERT_DIRS[*]}; do
+  maxdepth=${spec%%:*}; maxdepth=${maxdepth#*=}
+  name=${spec#*:}
+
+  found=( $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f -regextype egrep -regex '.*\.(crt|cert|pem)$' -exec grep -q '^-----BEGIN CERTIFICATE-----' {} \; -print 2>/dev/null || true) )
+
+  if [ ${#found[*]} -eq 0 ]; then
+    continue
+  fi
+
+  for file in ${found[*]}; do
+    hash=$(chroot $ROOT md5sum "${file}" | cut -f 1 -d ' ')
+    CERTIFICATES["$hash"]="${ROOT}${file}" # avoid dup files
+  done
+done
+
+## Kubeconfig files
+
+for spec in ${KUBECONFIG_DIRS[*]}; do
+  maxdepth=${spec%%:*}; maxdepth=${maxdepth#*=}
+  name=${spec#*:}
+
+  found=( $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f -exec grep -qE '^(kind: Config|contexts:|clusters:)$' {} \; -print 2>/dev/null || true) )
+
+  if [ ${#found[*]} -eq 0 ]; then
+    continue
+  fi
+
+  for file in ${found[*]}; do
+    hash=$(chroot ${ROOT} md5sum "${file}" | cut -f 1 -d ' ')
+    KUBECONFIGS["$hash"]="$file"
+  done
+done
+
+## Dump a valid values.yaml files for x509-certificates-exporter chart
+
+echo 'hostPathsExporter:'
+echo '  daemonSets:'
+echo "    ${ROLE}:"
+
+if [ ${#CERTIFICATES[*]} -gt 0 ]; then
+  echo '      watchFiles:'
+  printf -- "      - %s\n" ${CERTIFICATES[@]#$ROOT} | sort -u
+fi
+
+if [ ${#KUBECONFIGS[*]} -gt 0 ]; then
+  echo '      watchKubeconfFiles:'
+  printf -- "      - %s\n" ${KUBECONFIGS[@]#$ROOT} | sort -u
+fi
