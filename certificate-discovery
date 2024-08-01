@@ -1,7 +1,11 @@
 #!/bin/bash
 
-if [ $# -lt 1 ]; then
-  echo "Usage: $0 <ROLE=controlplane|node> [ROOTDIR=/]" >&2
+if [ $# -lt 2 ] && [ $# -gt 3 ]; then
+  echo "Usage: $0 ROOT_DIR ROLE [LABEL_SELECTOR]" >&2
+  echo "Where:"  >&2
+  echo "  ROOT_DIR        Host's root dir." >&2
+  echo "  ROLE            Daemonset name: one of 'controlpane' or 'node'." >&2
+  echo "  LABEL_SELECTOR  (Optional) Label selector for daemonset pods." >&2
   exit 1
 fi
 
@@ -9,8 +13,9 @@ declare -A CERTIFICATES=()
 declare -A KUBECONFIGS=()
 
 # Role will define the daemonSet name for x509-certificate-exporter config
-ROLE="$1"
-ROOT="${2:-/}"
+ROOT="$1"
+ROLE="$2"
+LABEL_SELECTOR="$3"
 IS_OKD=false
 OKD_ROOT_DIR=/etc/kubernetes/static-pod-resources
 LOG_LEVEL=${LOG_LEVEL:-0}
@@ -119,7 +124,12 @@ done
 echo 'hostPathsExporter:'
 echo '  daemonSets:'
 echo "    ${ROLE}:"
-
+if [ -n "$LABEL_SELECTOR" ]; then
+  LABEL_SELECTOR_NAME=${LABEL_SELECTOR%%:*}
+  LABEL_SELECTOR_VALUE=${LABEL_SELECTOR#*:}
+  echo '      nodeSelector:'
+  echo "        ${LABEL_SELECTOR_NAME}: \"${LABEL_SELECTOR_VALUE}\""
+fi
 if [ ${#CERTIFICATES[*]} -gt 0 ]; then
   echo '      watchFiles:'
   printf -- "      - %s\n" ${CERTIFICATES[@]#$ROOT} | sort -u
