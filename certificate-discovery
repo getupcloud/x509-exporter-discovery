@@ -45,10 +45,10 @@ if [ $ROLE == controlplane ]; then
     # find latest pod revision for each controlplane pod
     # each CP pod has it's own set of certificates
     for name in etcd kube-apiserver kube-controller-manager kube-scheduler; do
-      revision=$(chroot $ROOT printf "%s\n" $OKD_ROOT_DIR/${name}-pod-*/ | awk -F- '{print $NF}' | sort -n | tail -n 1)
+      revision=$(printf "%s\n" $ROOT$OKD_ROOT_DIR/${name}-pod-*/ | awk -F- '{print $NF}' | sort -n | tail -n 1)
       pod_dir="$OKD_ROOT_DIR/${name}-pod-$revision"
 
-      if [ -d "$pod_dir" ]; then
+      if [ -d "$ROOT$pod_dir" ]; then
         CERT_DIRS+=( "maxdepth=5:$pod_dir" )
       fi
     done
@@ -92,7 +92,7 @@ for spec in ${CERT_DIRS[*]}; do
 
   for file in ${found[*]}; do
     hash=$(chroot $ROOT md5sum "${file}" | cut -f 1 -d ' ')
-    CERTIFICATES["$hash"]="${ROOT}${file}" # avoid dup files
+    CERTIFICATES["$hash"]="${file}" # avoid dup files
   done
 done
 
@@ -110,7 +110,7 @@ for spec in ${KUBECONFIG_DIRS[*]}; do
 
   for file in ${found[*]}; do
     hash=$(chroot ${ROOT} md5sum "${file}" | cut -f 1 -d ' ')
-    KUBECONFIGS["$hash"]="$file"
+    KUBECONFIGS["$hash"]="$file" # avoid dup files
   done
 done
 
