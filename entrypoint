@@ -4,6 +4,7 @@ LOG_LEVEL=${LOG_LEVEL:-0}
 [ $LOG_LEVEL -ge 2 ] && set -x
 
 # randomize in order to avoid too many concurrent connection to kubeapi
+
 sleep $((RANDOM % 15))
 
 version=$(curl -sk https://kubernetes.default.svc.cluster.local/version | jq '"\(.major).\(.minor)"' -r | grep -o '[0-9\.]\+')
@@ -12,7 +13,7 @@ if [ -x /usr/local/bin/kubectl-v${version} ]; then
   ln -fs /usr/local/bin/kubectl-v${version} /usr/local/bin/kubectl
 fi
 
-
+NODE_ROLE=node
 NODE_NAME=$(kubectl get pod -n $NAMESPACE $POD_NAME -o json | jq -r .spec.nodeName)
 NODE=$(kubectl get node $NODE_NAME -o json)
 
@@ -33,7 +34,7 @@ file=${VALUES_FILE:-/data/values.yaml}
 dir=${file%/*}
 mkdir -p $dir
 
-/certificate-discovery $NODE_ROLE $NODE_LABEL $ROOT > $file
+/certificate-discovery $ROOT $NODE_ROLE $NODE_LABEL > $file
 
 if [ $LOG_LEVEL -ge 1 ]; then
   echo Created $file
