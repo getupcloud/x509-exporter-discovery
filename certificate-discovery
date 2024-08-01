@@ -89,14 +89,17 @@ for spec in ${CERT_DIRS[*]}; do
   maxdepth=${spec%%:*}; maxdepth=${maxdepth#*=}
   name=${spec#*:}
 
-  found=( $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f -regextype egrep -regex '.*\.(crt|cert|pem)$' -exec grep -q '^-----BEGIN CERTIFICATE-----' {} \; -print 2>/dev/null || true) )
+  found=(
+    $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f -regextype \
+      egrep -regex '.*\.(crt|cert|pem)$' -exec grep -q '^-----BEGIN CERTIFICATE-----' {} \; -print 2>/dev/null || true)
+  )
 
   if [ ${#found[*]} -eq 0 ]; then
     continue
   fi
 
   for file in ${found[*]}; do
-    if [ -s /excludes ] && grep -q -f /excludes <<<${file}; then
+    if [ -s "$EXCLUDES" ] && grep -q -f "$EXCLUDES" <<<${file}; then
       continue
     fi
     hash=$(chroot $ROOT md5sum "${file}" | cut -f 1 -d ' ')
@@ -110,14 +113,17 @@ for spec in ${KUBECONFIG_DIRS[*]}; do
   maxdepth=${spec%%:*}; maxdepth=${maxdepth#*=}
   name=${spec#*:}
 
-  found=( $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f -exec grep -qE '^(kind: Config|contexts:|clusters:)$' {} \; -print 2>/dev/null || true) )
+  found=(
+    $(chroot $ROOT find -L $name -maxdepth ${maxdepth:-1} -type f \
+      -exec grep -qE '^(kind: Config|contexts:|clusters:)$' {} \; -print 2>/dev/null || true)
+  )
 
   if [ ${#found[*]} -eq 0 ]; then
     continue
   fi
 
   for file in ${found[*]}; do
-    if [ -s /excludes ] && grep -q -f /excludes <<<${file}; then
+    if [ -s "$EXCLUDES" ] && grep -q -f "$EXCLUDES" <<<${file}; then
       continue
     fi
     hash=$(chroot ${ROOT} md5sum "${file}" | cut -f 1 -d ' ')
