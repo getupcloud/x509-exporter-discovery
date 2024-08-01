@@ -12,16 +12,18 @@ if [ -x /usr/local/bin/kubectl-v${version} ]; then
   ln -fs /usr/local/bin/kubectl-v${version} /usr/local/bin/kubectl
 fi
 
-# Discovery for each kind of node
+
+NODE_NAME=$(kubectl get pod -n $NAMESPACE $POD_NAME -o json | jq -r .spec.nodeName)
+NODE=$(kubectl get node $NODE_NAME -o json)
+
+# Discovery node role
+IS_CP=$(echo "$NODE" | jq '.metadata.labels | (has("node-role.kubernetes.io/control-plane") == true or has("node-role.kubernetes.io/master") == true)')
+
 if $IS_CP ;then
   ROLE=controlplane
 else
   ROLE=node
 fi
-
-NODE_NAME=$(kubectl get pod -n $NAMESPACE $POD_NAME -o json | jq -r .spec.nodeName)
-NODE=$(kubectl get node $NODE_NAME -o json)
-IS_CP=$(echo "$NODE" | jq '.metadata.labels | (has("node-role.kubernetes.io/control-plane") == true or has("node-role.kubernetes.io/master") == true)')
 
 file=${VALUES_FILE:-/data/values.yaml}
 dir=${file%/*}
