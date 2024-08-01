@@ -12,6 +12,13 @@ if [ -x /usr/local/bin/kubectl-v${version} ]; then
   ln -fs /usr/local/bin/kubectl-v${version} /usr/local/bin/kubectl
 fi
 
+# Discovery for each kind of node
+if $IS_CP ;then
+  ROLE=controlplane
+else
+  ROLE=node
+fi
+
 NODE_NAME=$(kubectl get pod -n $NAMESPACE $POD_NAME -o json | jq -r .spec.nodeName)
 NODE=$(kubectl get node $NODE_NAME -o json)
 IS_CP=$(echo "$NODE" | jq '.metadata.labels | (has("node-role.kubernetes.io/control-plane") == true or has("node-role.kubernetes.io/master") == true)')
@@ -20,14 +27,7 @@ file=${VALUES_FILE:-/data/values.yaml}
 dir=${file%/*}
 mkdir -p $dir
 
-# Discovery for each kind of node
-if $IS_CP ;then
-  /certificate-discovery controlplane $ROOT
-  CONFIGMAP_NAME=${CONFIGMAP_NAME:-host-paths-exporter-controlplane-values}
-else
-  /certificate-discovery node $ROOT
-  CONFIGMAP_NAME=${CONFIGMAP_NAME:-host-paths-exporter-node-values}
-fi >$file
+/certificate-discovery $ROLE $ROOT > $file
 
 if [ $LOG_LEVEL -ge 1 ]; then
   echo Created $file
@@ -38,6 +38,8 @@ fi
 
 # Create the configmaps to be used by helm to install x509-certificates-exporter
 # they are going to be overwriten for each node where this code runs, but thats not a problem because the results should be the same.
+
+CONFIGMAP_NAME=$(printf -- "${CONFIGMAP_NAME_FMT:-%s}" $ROLE)
 kubectl create configmap -n ${CONFIGMAP_NAMESPACE:-$NAMESPACE} $CONFIGMAP_NAME --from-file=${file} --dry-run -o yaml | kubectl apply -f -
 
 # Restart after some time because some OKD controlplane pods may have being updates, incrementing its revision number.
