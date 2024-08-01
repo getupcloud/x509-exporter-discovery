@@ -124,12 +124,21 @@ done
 echo 'hostPathsExporter:'
 echo '  daemonSets:'
 echo "    ${ROLE}:"
+echo '    tolerations:'
+echo '    - effect: NoSchedule'
+echo '      operator: Exists'
+
 if [ -n "$LABEL_SELECTOR" ]; then
   LABEL_SELECTOR_NAME=${LABEL_SELECTOR%%=*}
-  LABEL_SELECTOR_VALUE=${LABEL_SELECTOR#*=}
+  if [[ $LABEL_SELECTOR =~ .*=.* ]]; then
+    LABEL_SELECTOR_VALUE=${LABEL_SELECTOR#*=}
+  else
+    LABEL_SELECTOR_VALUE=''
+  fi
   echo '      nodeSelector:'
   echo "        ${LABEL_SELECTOR_NAME}: \"${LABEL_SELECTOR_VALUE}\""
 fi
+
 if [ ${#CERTIFICATES[*]} -gt 0 ]; then
   echo '      watchFiles:'
   printf -- "      - %s\n" ${CERTIFICATES[@]#$ROOT} | sort -u
