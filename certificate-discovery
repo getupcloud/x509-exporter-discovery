@@ -124,9 +124,9 @@ done
 echo 'hostPathsExporter:'
 echo '  daemonSets:'
 echo "    ${ROLE}:"
-echo '    tolerations:'
-echo '    - effect: NoSchedule'
-echo '      operator: Exists'
+echo '      tolerations:'
+echo '      - effect: NoSchedule'
+echo '        operator: Exists'
 
 if [ -n "$LABEL_SELECTOR" ]; then
   LABEL_SELECTOR_NAME=${LABEL_SELECTOR%%=*}
