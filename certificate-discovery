@@ -4,7 +4,7 @@ if [ $# -lt 2 ] && [ $# -gt 3 ]; then
   echo "Usage: $0 ROOT_DIR ROLE [LABEL_SELECTOR]" >&2
   echo "Where:"  >&2
   echo "  ROOT_DIR        Host's root dir." >&2
-  echo "  ROLE            Daemonset name: one of 'controlpane' or 'node'." >&2
+  echo "  ROLE            Daemonset name: one of 'controlplane' or 'node'." >&2
   echo "  LABEL_SELECTOR  (Optional) Label selector for daemonset pods." >&2
   exit 1
 fi
