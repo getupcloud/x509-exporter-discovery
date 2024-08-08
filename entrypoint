@@ -47,7 +47,7 @@ fi
 # they are going to be overwriten for each node where this code runs, but thats not a problem because the results should be the same.
 
 CONFIGMAP_NAME=$(printf -- "${CONFIGMAP_NAME_FMT:-%s}" $NODE_ROLE)
-kubectl create configmap -n ${CONFIGMAP_NAMESPACE:-$NAMESPACE} $CONFIGMAP_NAME --from-file=${file} --dry-run -o yaml | kubectl apply -f -
+kubectl create configmap -n ${CONFIGMAP_NAMESPACE:-$NAMESPACE} $CONFIGMAP_NAME --from-file=${file} --dry-run=client -o yaml | kubectl apply -f -
 
 # Restart after some time because some OKD controlplane pods may have being updates, incrementing its revision number.
 FREQUENCY_HOURS=${FREQUENCY_HOURS:-24}
